@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebPush Example</title>
+  <link rel="manifest" href="/app.webmanifest">
+  <style>
+    .status { margin-block: 1rem }
+    .push-unavailable #controls { display: none }
+  </style>
+</head>
+<body>
+  <h1>WebPush Example</h1>
+  <div id="controls">
+    <button id="send-push">Subscribe &amp; Send Push</button>
+    <button id="unsubscribe">Unsubscribe</button>
+  </div>
+  <div class="status"></div>
+  <div id="msg"></div>
+  <script src="/main.js"></script>
+</body>
+</html>
