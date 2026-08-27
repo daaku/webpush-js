@@ -286,9 +286,9 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
   const publicKey = await vapidPublicKey(keys)
   const subscriber = 'mailto:admin@example.com'
   let request: Request | undefined
-  const fetchMock = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchMock = (input: RequestInfo | URL, init?: RequestInit) => {
     request = new Request(input, init)
-    return new Response(null, { status: 201 })
+    return Promise.resolve(new Response(null, { status: 201 }))
   }
   await send(
     RFC_SUBSCRIPTION,
@@ -391,9 +391,9 @@ Deno.test('vapid key material is imported and cached once per JWK or string', as
 Deno.test('send posts the encrypted record with the expected headers', async () => {
   const keys = await generateVapidKeys()
   let request: Request | undefined
-  const fetchMock = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchMock = (input: RequestInfo | URL, init?: RequestInit) => {
     request = new Request(input, init)
-    return new Response(null, { status: 201 })
+    return Promise.resolve(new Response(null, { status: 201 }))
   }
   await send(
     SUBSCRIPTION,
@@ -467,8 +467,8 @@ Deno.test('send throws PushError on endpoint errors', async () => {
   for (const c of cases) {
     const error = await assertRejects(() =>
       send(SUBSCRIPTION, 'x', options, {
-        fetch: async () =>
-          new Response(c.body, { status: c.status, headers: c.headers }),
+        fetch: () =>
+          Promise.resolve(new Response(c.body, { status: c.status, headers: c.headers })),
       })
     ) as PushError
     assert(error instanceof Error)
@@ -553,9 +553,9 @@ Deno.test('accepts a JSON-serialized VAPID private key', async () => {
     subscriber: 'https://app.example.com/',
     ttl: 60,
   }, {
-    fetch: async () => {
+    fetch: () => {
       sent = true
-      return new Response(null, { status: 201 })
+      return Promise.resolve(new Response(null, { status: 201 }))
     },
   })
   assert(sent)
