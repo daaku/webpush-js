@@ -276,9 +276,9 @@ Deno.test('generateVapidKeys returns a JWK private key and matching public key',
   )
 })
 
-Deno.test('vapidPublicKey marshals JWK x and y into the raw public point', () => {
-  assertEq(vapidPublicKey(RFC_AS_JWK), RFC_AS_PUBLIC)
-  assertEq(vapidPublicKey(JSON.stringify(RFC_AS_JWK)), RFC_AS_PUBLIC)
+Deno.test('vapidPublicKey marshals JWK x and y into the raw public point', async () => {
+  assertEq(await vapidPublicKey(RFC_AS_JWK), RFC_AS_PUBLIC)
+  assertEq(await vapidPublicKey(JSON.stringify(RFC_AS_JWK)), RFC_AS_PUBLIC)
 })
 
 Deno.test('authorization header carries a valid ES256 JWT', async () => {
@@ -330,7 +330,7 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
 
   // k is the raw public point marshaled from the JWK; it must equal the
   // public key WebCrypto generated alongside the private key.
-  assertEq(k, vapidPublicKey(keys.privateKey))
+  assertEq(k, await vapidPublicKey(keys.privateKey))
   assertEq(k, keys.publicKey)
 })
 
@@ -344,6 +344,36 @@ const SUBSCRIPTION: Subscription = {
       'BOaRpSCtjsB92YouZnj8iNgCdFDNVNbid40AGxLcR47DI1S-zQkYf1CDG2G4y9GXeg74-8U_mEMzSZc-mRF_X0Y',
   },
 }
+
+Deno.test('vapid key material is imported and cached once per JWK', async () => {
+  const original = crypto.subtle.importKey.bind(crypto.subtle)
+  let ecdsaImports = 0
+  const wrapped = ((...args: Parameters<typeof original>) => {
+    const [format, , algorithm] = args
+    if ((format as string) === 'jwk' && (algorithm as { name: string }).name === 'ECDSA') {
+      ecdsaImports++
+    }
+    return original(...args)
+  }) as typeof original
+  crypto.subtle.importKey = wrapped
+  try {
+    const keys = await generateVapidKeys()
+    const options = {
+      vapid: keys.privateKey,
+      subscriber: 'mailto:admin@example.com',
+      ttl: 60,
+    }
+    const fetchMock = async () => new Response(null, { status: 201 })
+    for (let i = 0; i < 3; i++) {
+      await send(SUBSCRIPTION, 'x', options, { fetch: fetchMock })
+      assertEq(await vapidPublicKey(keys.privateKey), keys.publicKey)
+    }
+    // Repeated sends with the same JWK object reuse the cached import.
+    assertEq(ecdsaImports, 1)
+  } finally {
+    crypto.subtle.importKey = original
+  }
+})
 
 Deno.test('send posts the encrypted record with the expected headers', async () => {
   const keys = await generateVapidKeys()

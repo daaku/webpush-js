@@ -95,30 +95,44 @@ function concat(...parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
 // VAPID (RFC 8292) ----------------------------------------------------------
 
 interface VapidKeyMaterial {
-  jwk: JsonWebKey
+  key: CryptoKey // ECDSA P-256 key imported from the JWK
   publicKey: Uint8Array<ArrayBuffer>
 }
 
 // Keyed by the caller's JWK object, so entries are dropped once the app
 // releases its configuration. JSON-serialized strings are parsed per call.
-const vapidKeyCache = new WeakMap<JsonWebKey, VapidKeyMaterial>()
+// The cached promise also deduplicates concurrent imports of the same key.
+const vapidKeyCache = new WeakMap<JsonWebKey, Promise<VapidKeyMaterial>>()
 
-function vapidKeyMaterial(vapid: JsonWebKey | string): VapidKeyMaterial {
+async function vapidKeyMaterial(
+  vapid: JsonWebKey | string,
+): Promise<VapidKeyMaterial> {
   const jwk = typeof vapid === 'string'
     ? JSON.parse(vapid) as JsonWebKey
     : vapid
   let material = vapidKeyCache.get(jwk)
   if (material) return material
-  material = {
+  material = importVapidKey(jwk)
+  vapidKeyCache.set(jwk, material)
+  return material
+}
+
+async function importVapidKey(jwk: JsonWebKey): Promise<VapidKeyMaterial> {
+  const key = await crypto.subtle.importKey(
+    'jwk',
     jwk,
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    false,
+    ['sign'],
+  )
+  return {
+    key,
     publicKey: concat(
       new Uint8Array([4]),
       b64decode(jwk.x ?? ''),
       b64decode(jwk.y ?? ''),
     ),
   }
-  vapidKeyCache.set(jwk, material)
-  return material
 }
 
 /** Generate a new VAPID key pair. Store privateKey, share publicKey. */
@@ -136,8 +150,10 @@ export async function generateVapidKeys(): Promise<VapidKeys> {
 }
 
 /** The base64url raw public point for a VAPID private key (JWK or JSON). */
-export function vapidPublicKey(vapid: JsonWebKey | string): string {
-  return b64urlEncode(vapidKeyMaterial(vapid).publicKey)
+export async function vapidPublicKey(
+  vapid: JsonWebKey | string,
+): Promise<string> {
+  return b64urlEncode((await vapidKeyMaterial(vapid)).publicKey)
 }
 
 function b64urlJson(value: unknown): string {
@@ -145,16 +161,9 @@ function b64urlJson(value: unknown): string {
 }
 
 async function signJwt(
-  jwk: JsonWebKey,
+  key: CryptoKey,
   claims: Record<string, unknown>,
 ): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'jwk',
-    jwk,
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    false,
-    ['sign'],
-  )
   const unsigned = `${b64urlJson({ typ: 'JWT', alg: 'ES256' })}.${
     b64urlJson(claims)
   }`
@@ -187,8 +196,8 @@ async function authHeader(
   if (!subscriber.startsWith('https:') && !subscriber.startsWith('mailto:')) {
     throw new Error(`invalid subscriber: ${subscriber}`)
   }
-  const { jwk, publicKey } = vapidKeyMaterial(vapid)
-  const jwt = await signJwt(jwk, {
+  const { key, publicKey } = await vapidKeyMaterial(vapid)
+  const jwt = await signJwt(key, {
     aud: url.origin,
     exp: Math.floor(expiration.getTime() / 1000),
     sub: subscriber,
