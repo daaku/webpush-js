@@ -1,7 +1,7 @@
 // Tests against RFC 8291 appendix A test vectors and a mocked fetch.
 
-import { encrypt, generateVapidKey, send, vapidPublicKey } from '../mod.ts'
-import type { PushError, SendOptions, Subscription } from '../mod.ts'
+import { encrypt, generateVapidKey, send, vapidPublicKey } from './mod.ts'
+import type { PushError, SendOptions, Subscription } from './mod.ts'
 
 const textEncoder = new TextEncoder()
 
