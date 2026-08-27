@@ -67,21 +67,23 @@ export interface PushError extends Error {
   location: string
 }
 
-function b64urlEncode(bytes: Uint8Array): string {
-  return bytes.toBase64({ alphabet: 'base64url', omitPadding: true })
+function b64Alphabet(input: string) {
+  const isStd = (v: string) => v === '+' || v === '/'
+  const isURL = (v: string) => v === '-' || v === '_'
+  for (const char of input) {
+    if (isStd(char)) break
+    if (isURL(char)) return 'base64url'
+  }
+  return 'base64'
 }
 
 // Permissive: accepts URL-safe or standard alphabets, with or without padding.
 function b64decode(input: string): Uint8Array<ArrayBuffer> {
-  const bin = atob(
-    input.replace(/-/g, '+').replace(/_/g, '/').padEnd(
-      Math.ceil(input.length / 4) * 4,
-      '=',
-    ),
-  )
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
-  return out
+  return Uint8Array.fromBase64(input, { alphabet: b64Alphabet(input) })
+}
+
+function b64urlEncode(bytes: Uint8Array): string {
+  return bytes.toBase64({ alphabet: 'base64url', omitPadding: true })
 }
 
 function concat(...parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
