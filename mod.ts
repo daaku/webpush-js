@@ -129,27 +129,15 @@ function b64urlJson(value: unknown): string {
   return b64urlEncode(textEncoder.encode(JSON.stringify(value)))
 }
 
-// WebCrypto ECDSA returns raw r||s on Node/Deno and DER in some browsers.
+// WebCrypto returns ECDSA signatures as raw r||s (IEEE P1363), which is
+// exactly the 64 bytes JWT ES256 requires. Assert it rather than convert.
 function toRawSignature(sig: Uint8Array): Uint8Array {
-  if (sig.length === 64) return sig
-  // DER SEQUENCE { INTEGER r, INTEGER s }
-  let pos = 2 + (sig[1] & 0x80 ? sig[1] & 0x7f : 0)
-  const readInt = (): Uint8Array => {
-    pos += 2
-    let len = sig[pos - 1]
-    if (len & 0x80) {
-      const bytes = len & 0x7f
-      len = 0
-      for (let i = 0; i < bytes; i++) len = len * 256 + sig[pos++]
-    }
-    let int = sig.subarray(pos, pos + len)
-    pos += len
-    if (int[0] === 0) int = int.subarray(1)
-    const out = new Uint8Array(32)
-    out.set(int.subarray(int.length - 32))
-    return out
+  if (sig.length !== 64) {
+    throw new Error(
+      `unexpected ECDSA signature length: ${sig.length}, expected 64`,
+    )
   }
-  return new Uint8Array([...readInt(), ...readInt()])
+  return sig
 }
 
 async function signJwt(
@@ -173,7 +161,14 @@ async function signJwt(
       textEncoder.encode(unsigned),
     ),
   )
-  return `${unsigned}.${b64urlEncode(toRawSignature(sig))}`
+  // WebCrypto returns ECDSA signatures as raw r||s (IEEE P1363), which is
+  // exactly the 64 bytes JWT ES256 requires. Assert it rather than convert.
+  if (sig.length !== 64) {
+    throw new Error(
+      `unexpected ECDSA signature length: ${sig.length}, expected 64`,
+    )
+  }
+  return `${unsigned}.${b64urlEncode(sig)}`
 }
 
 async function authHeader(
