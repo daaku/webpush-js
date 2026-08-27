@@ -34,14 +34,16 @@ Everything lives in `mod.ts`; runs in Deno, Node, and browsers.
 
 - Public API: `generateVapidKeys()`, `vapidPublicKey(vapid)`,
   `encrypt(subscription, message, options, deps?)`, `send(...)`, plus types
-  `Subscription`, `VapidKeys`, `SendOptions`, `Deps`, `EncryptedRequest`,
-  `PushError`, `Urgency`. `vapidPublicKey` is async.
+  `Subscription`, `SendOptions`, `Deps`, `EncryptedRequest`,
+  `PushError`, `Urgency`. `generateVapidKeys` returns the private key as a
+  `JsonWebKey`; derive the public point with `vapidPublicKey` (async).
 - VAPID private keys are `JsonWebKey` or JSON-serialized JWK; the public key is
   the base64url raw point (65 bytes, 0x04 prefix).
 - VAPID key material (imported ECDSA `CryptoKey` + base64url public point) is
-  cached in a WeakMap keyed by the caller's JWK object; the cached promise
-  deduplicates concurrent imports. JSON-string inputs are re-parsed per call,
-  so they never hit the cache. A test asserts exactly one `importKey` per JWK.
+  cached: a WeakMap keyed by the caller's JWK object, plus a Map keyed by the
+  serialized JSON string. The cached promise deduplicates concurrent imports.
+  A test asserts exactly one `importKey` per JWK and one per serialized
+  string.
 - ECDSA signatures are raw r||s (64 bytes) — WebCrypto is spec'd that way; do
   not reintroduce DER handling.
 - Encryption is pinned to RFC 8291 appendix A vectors via `deps.keyPair` and
