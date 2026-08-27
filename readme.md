@@ -8,9 +8,9 @@ browsers. No dependencies.
 ## Usage
 
 ```ts
-import { generateVapidKeys, send, vapidPublicKey } from './mod.ts'
+import { generateVapidKey, send, vapidPublicKey } from './mod.ts'
 
-const privateKey = await generateVapidKeys()
+const privateKey = await generateVapidKey()
 // vapidPublicKey(privateKey) goes to the frontend for pushManager.subscribe,
 // privateKey (JWK) is stored server-side.
 
@@ -27,7 +27,7 @@ await send(subscription, JSON.stringify({ title: 'Hello' }), {
 
 ## API
 
-- `generateVapidKeys()` - new VAPID private key (JWK)
+- `generateVapidKey()` - new VAPID private key (JWK)
 - `vapidPublicKey(vapid)` - raw public point (base64url) derived from a JWK (or JSON-serialized JWK)
 - `encrypt(subscription, message, options, deps?)` - build the request without sending
 - `send(subscription, message, options, deps?)` - encrypt and POST

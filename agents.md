@@ -31,10 +31,10 @@ Everything lives in `mod.ts`; runs in Deno, Node, and browsers.
 
 ## Architecture notes
 
-- Public API: `generateVapidKeys()`, `vapidPublicKey(vapid)`,
+- Public API: `generateVapidKey()`, `vapidPublicKey(vapid)`,
   `encrypt(subscription, message, options, deps?)`, `send(...)`, plus types
   `Subscription`, `SendOptions`, `Deps`, `EncryptedRequest`,
-  `PushError`, `Urgency`. `generateVapidKeys` returns the private key as a
+  `PushError`, `Urgency`. `generateVapidKey` returns the private key as a
   `JsonWebKey`; derive the public point with `vapidPublicKey` (async).
 - VAPID private keys are `JsonWebKey` or JSON-serialized JWK; the public key is
   the base64url raw point (65 bytes, 0x04 prefix).

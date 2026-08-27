@@ -1,7 +1,7 @@
 // Example web push server: serves the demo page, generates VAPID keys on
 // first run, and schedules pushes against subscriptions posted by the page.
 
-import { generateVapidKeys, send, vapidPublicKey } from '../mod.ts'
+import { generateVapidKey, send, vapidPublicKey } from '../mod.ts'
 import type { Subscription } from '../mod.ts'
 
 const PORT = Number(Deno.env.get('PORT') ?? 8000)
@@ -19,7 +19,7 @@ async function loadVapidKeys(): Promise<JsonWebKey> {
   try {
     return JSON.parse(await Deno.readTextFile(VAPID_FILE)) as JsonWebKey
   } catch {
-    const keys = await generateVapidKeys()
+    const keys = await generateVapidKey()
     await Deno.writeTextFile(VAPID_FILE, JSON.stringify(keys, null, 2))
     console.log(`generated new VAPID keys, stored in ${VAPID_FILE}`)
     return keys

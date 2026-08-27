@@ -135,8 +135,8 @@ async function importVapidKey(jwk: JsonWebKey): Promise<VapidKeyMaterial> {
   }
 }
 
-/** Generate a new VAPID key pair, returning the private key as a JWK. */
-export async function generateVapidKeys(): Promise<JsonWebKey> {
+/** Generate a new VAPID private key as a JWK. */
+export async function generateVapidKey(): Promise<JsonWebKey> {
   const pair = await crypto.subtle.generateKey(
     { name: 'ECDSA', namedCurve: 'P-256' },
     true,
