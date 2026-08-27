@@ -1,6 +1,9 @@
-// Web Push (RFC 8030) client built on WebCrypto: aes128gcm message encryption
-// (RFC 8291, RFC 8188) with VAPID authentication (RFC 8292).
-// VAPID keys are JWK.
+/**
+ * Zero-dependency Web Push (RFC 8030) client built on WebCrypto.
+ *
+ * Encrypts messages with aes128gcm (RFC 8291, RFC 8188) and authenticates
+ * with VAPID (RFC 8292). VAPID keys are JWK.
+ */
 
 const textEncoder = new TextEncoder()
 
