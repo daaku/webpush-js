@@ -1,6 +1,7 @@
 // Web Push (RFC 8030) client built on WebCrypto: aes128gcm message encryption
 // (RFC 8291, RFC 8188) with VAPID authentication (RFC 8292).
-// VAPID keys are JWK; pass any global dependency (fetch) explicitly for mocking.
+// VAPID private keys are base64url raw scalars; pass any global dependency
+// (fetch) explicitly for mocking.
 
 const textEncoder = new TextEncoder()
 
@@ -28,14 +29,11 @@ export interface Subscription {
 /** VAPID keys. Give publicKey to the frontend, keep privateKey on the server. */
 export interface VapidKeys {
   publicKey: string // base64url raw public point
-  privateKey: JsonWebKey
+  privateKey: string // base64url raw private scalar
 }
 
-/** Accepted VAPID key forms: generated pair, bare JWK, or JSON-serialized JWK. */
-export type VapidKey = VapidKeys | JsonWebKey | string
-
 export interface SendOptions {
-  vapid: VapidKey
+  vapid: string // base64url raw VAPID private scalar
   subscriber: string // https URL or mailto: address identifying the application
   ttl: number // seconds
   topic?: string
@@ -97,9 +95,96 @@ function concat(...parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
 
 // VAPID (RFC 8292) ----------------------------------------------------------
 
-function vapidJwk(vapid: VapidKey): JsonWebKey {
-  if (typeof vapid === 'string') return JSON.parse(vapid) as JsonWebKey
-  return 'privateKey' in vapid ? vapid.privateKey : vapid
+// P-256 parameters for deriving the public point from a private scalar.
+const P256_P = 2n ** 256n - 2n ** 224n + 2n ** 192n + 2n ** 96n - 1n
+const P256_N =
+  0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n
+const P256_GX =
+  0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296n
+const P256_GY =
+  0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5n
+
+function bytesToBigint(bytes: Uint8Array): bigint {
+  let value = 0n
+  for (const byte of bytes) value = (value << 8n) | BigInt(byte)
+  return value
+}
+
+function bigintToBytes(value: bigint): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(32)
+  for (let i = 31; i >= 0; i--) {
+    out[i] = Number(value & 0xffn)
+    value >>= 8n
+  }
+  return out
+}
+
+// Double-and-add scalar multiplication of the P-256 base point.
+function p256Point(d: bigint): [bigint, bigint] {
+  const mod = (a: bigint) => ((a % P256_P) + P256_P) % P256_P
+  const inv = (a: bigint): bigint => {
+    let [x, r] = [mod(a), 1n]
+    for (let e = P256_P - 2n; e > 0n; e >>= 1n) {
+      if (e & 1n) r = mod(r * x)
+      x = mod(x * x)
+    }
+    return r
+  }
+  const add = (
+    px: bigint,
+    py: bigint,
+    qx: bigint,
+    qy: bigint,
+  ): [bigint, bigint] => {
+    if (px === 0n && py === 0n) return [qx, qy]
+    if (qx === 0n && qy === 0n) return [px, py]
+    if (px === qx && mod(py + qy) === 0n) return [0n, 0n]
+    const slope = px === qx && py === qy
+      ? mod((3n * px * px - 3n) * inv(2n * py))
+      : mod((qy - py) * inv(qx - px))
+    const rx = mod(slope * slope - px - qx)
+    const ry = mod(slope * (px - rx) - py)
+    return [rx, ry]
+  }
+  let [rx, ry] = [0n, 0n]
+  let [bx, by] = [P256_GX, P256_GY]
+  while (d > 0n) {
+    if (d & 1n) [rx, ry] = add(rx, ry, bx, by)
+    ;[bx, by] = add(bx, by, bx, by)
+    d >>= 1n
+  }
+  return [rx, ry]
+}
+
+interface VapidKeyMaterial {
+  jwk: JsonWebKey
+  publicKey: Uint8Array<ArrayBuffer>
+}
+
+// WebCrypto cannot import raw ECDSA private keys, so the scalar is expanded
+// into a full JWK (x and y via p256Point) before it can sign.
+function vapidKeyMaterial(privateKey: string): VapidKeyMaterial {
+  const d = b64decode(privateKey)
+  if (d.length !== 32) {
+    throw new Error('invalid VAPID private key, expected 32 bytes')
+  }
+  const scalar = bytesToBigint(d)
+  if (scalar === 0n || scalar >= P256_N) {
+    throw new Error('invalid VAPID private key scalar')
+  }
+  const [x, y] = p256Point(scalar)
+  const xBytes = bigintToBytes(x)
+  const yBytes = bigintToBytes(y)
+  return {
+    jwk: {
+      kty: 'EC',
+      crv: 'P-256',
+      x: b64urlEncode(xBytes),
+      y: b64urlEncode(yBytes),
+      d: b64urlEncode(d),
+    },
+    publicKey: concat(new Uint8Array([4]), xBytes, yBytes),
+  }
 }
 
 /** Generate a new VAPID key pair. Store privateKey, share publicKey. */
@@ -109,19 +194,13 @@ export async function generateVapidKeys(): Promise<VapidKeys> {
     true,
     ['sign'],
   )
-  const privateKey = await crypto.subtle.exportKey('jwk', pair.privateKey)
-  const publicKey = b64urlEncode(
-    new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey)),
-  )
-  return { publicKey, privateKey }
-}
-
-function publicKeyFromJwk(jwk: JsonWebKey): Uint8Array {
-  return new Uint8Array([
-    4,
-    ...b64decode(jwk.x ?? ''),
-    ...b64decode(jwk.y ?? ''),
-  ])
+  const jwk = await crypto.subtle.exportKey('jwk', pair.privateKey)
+  return {
+    publicKey: b64urlEncode(
+      new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey)),
+    ),
+    privateKey: jwk.d!,
+  }
 }
 
 function b64urlJson(value: unknown): string {
@@ -156,7 +235,7 @@ async function signJwt(
 async function authHeader(
   endpoint: string,
   subscriber: string,
-  jwk: JsonWebKey,
+  privateKey: string,
   expiration: Date,
 ): Promise<string> {
   let url: URL
@@ -171,12 +250,13 @@ async function authHeader(
   if (!subscriber.startsWith('https:') && !subscriber.startsWith('mailto:')) {
     throw new Error(`invalid subscriber: ${subscriber}`)
   }
+  const { jwk, publicKey } = vapidKeyMaterial(privateKey)
   const jwt = await signJwt(jwk, {
     aud: url.origin,
     exp: Math.floor(expiration.getTime() / 1000),
     sub: subscriber,
   })
-  return `vapid t=${jwt}, k=${b64urlEncode(publicKeyFromJwk(jwk))}`
+  return `vapid t=${jwt}, k=${b64urlEncode(publicKey)}`
 }
 
 // Message encryption (RFC 8188 aes128gcm) ------------------------------------
@@ -305,7 +385,7 @@ export async function encrypt(
   const authorization = await authHeader(
     endpoint,
     options.subscriber,
-    vapidJwk(options.vapid),
+    options.vapid,
     expiration,
   )
 

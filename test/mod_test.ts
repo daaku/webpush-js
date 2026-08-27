@@ -67,13 +67,15 @@ const RFC_AS_PUBLIC =
 const RFC_BODY =
   'DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN'
 
+const RFC_AS_PRIVATE = 'yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw'
+
 // JWK forms of the RFC's private keys, public points derived from the scalars.
 const RFC_AS_JWK = {
   kty: 'EC',
   crv: 'P-256',
   x: '_jP0qw3qcZFNtVgj9ztUlI9BMG2SBzLbuaWaUyhkgiA',
   y: 'Dll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8',
-  d: 'yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw',
+  d: RFC_AS_PRIVATE,
 }
 const RFC_UA_JWK = {
   kty: 'EC',
@@ -110,7 +112,7 @@ async function rfcDeps(): Promise<Deps> {
 }
 
 const RFC_OPTIONS = {
-  vapid: RFC_AS_JWK,
+  vapid: RFC_AS_PRIVATE,
   subscriber: 'https://example.com/',
   ttl: 60,
 }
@@ -135,6 +137,8 @@ Deno.test('send produces the exact RFC 8291 test vector body', async () => {
   assertEq(captured.headers.get('content-type'), 'application/octet-stream')
   assertEq(captured.headers.get('ttl'), '60')
   assertEq(b64url(captured.body), RFC_BODY)
+  const authorization = captured.headers.get('authorization') ?? ''
+  assertEq(authorization.split(', k=')[1], RFC_AS_PUBLIC)
 })
 
 Deno.test('body decrypts like a browser and matches RFC intermediates', async () => {
@@ -258,19 +262,8 @@ Deno.test('generateVapidKeys returns a consistent key pair', async () => {
   const pub = b64d(keys.publicKey)
   assertEq(pub.length, 65)
   assertEq(pub[0], 4)
-  assertEq(keys.privateKey.kty, 'EC')
-  assertEq(keys.privateKey.crv, 'P-256')
-  assert(keys.privateKey.d)
-  assertEq(
-    keys.publicKey,
-    b64url(
-      concat(
-        new Uint8Array([4]),
-        b64d(keys.privateKey.x ?? ''),
-        b64d(keys.privateKey.y ?? ''),
-      ),
-    ),
-  )
+  const priv = b64d(keys.privateKey)
+  assertEq(priv.length, 32)
 })
 
 Deno.test('authorization header carries a valid ES256 JWT', async () => {
@@ -306,8 +299,8 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
   )
 
   const verifyKey = await crypto.subtle.importKey(
-    'jwk',
-    { kty: 'EC', crv: 'P-256', x: vapid.privateKey.x, y: vapid.privateKey.y },
+    'raw',
+    b64d(k),
     { name: 'ECDSA', namedCurve: 'P-256' },
     false,
     ['verify'],
@@ -320,16 +313,9 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
   )
   assert(valid, 'JWT signature does not verify')
 
-  assertEq(
-    k,
-    b64url(
-      concat(
-        new Uint8Array([4]),
-        b64d(vapid.privateKey.x ?? ''),
-        b64d(vapid.privateKey.y ?? ''),
-      ),
-    ),
-  )
+  // k is the public point derived from the private scalar; it must match the
+  // key pair WebCrypto generated.
+  assertEq(k, vapid.publicKey)
 })
 
 // send() behavior -------------------------------------------------------------
@@ -490,22 +476,12 @@ Deno.test('send validates its inputs', async () => {
   await assertRejects(() =>
     send({ ...SUBSCRIPTION, endpoint: 'not a url' }, 'x', options)
   )
+  await assertRejects(() =>
+    send(SUBSCRIPTION, 'x', { ...options, vapid: 'AAAA' })
+  )
+  await assertRejects(() =>
+    send(SUBSCRIPTION, 'x', { ...options, vapid: 'A'.repeat(43) })
+  )
   const { ttl: _ttl, ...noTtl } = options
   await assertRejects(() => send(SUBSCRIPTION, 'x', noTtl as SendOptions))
-})
-
-Deno.test('accepts a JSON-serialized VAPID key', async () => {
-  const vapid = await generateVapidKeys()
-  let sent = false
-  await send(SUBSCRIPTION, 'x', {
-    vapid: JSON.stringify(vapid.privateKey),
-    subscriber: 'https://app.example.com/',
-    ttl: 60,
-  }, {
-    fetch: async () => {
-      sent = true
-      return new Response(null, { status: 201 })
-    },
-  })
-  assert(sent)
 })
