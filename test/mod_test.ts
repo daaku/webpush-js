@@ -1,6 +1,6 @@
 // Tests against RFC 8291 appendix A test vectors and a mocked fetch.
 
-import { encrypt, generateVapidKeys, send } from '../mod.ts'
+import { encrypt, generateVapidKeys, send, vapidPublicKey } from '../mod.ts'
 import type { Deps, PushError, SendOptions, Subscription } from '../mod.ts'
 
 const textEncoder = new TextEncoder()
@@ -257,17 +257,37 @@ Deno.test('body decrypts like a browser and matches RFC intermediates', async ()
 
 // VAPID keys and JWT ---------------------------------------------------------
 
-Deno.test('generateVapidKeys returns a consistent key pair', async () => {
-  const keys = await generateVapidKeys()
-  const pub = b64d(keys.publicKey)
+Deno.test('generateVapidKeys returns a private key, vapidPublicKey derives the rest', async () => {
+  const privateKey = await generateVapidKeys()
+  assertEq(b64d(privateKey).length, 32)
+  const publicKey = vapidPublicKey(privateKey)
+  const pub = b64d(publicKey)
   assertEq(pub.length, 65)
   assertEq(pub[0], 4)
-  const priv = b64d(keys.privateKey)
-  assertEq(priv.length, 32)
+})
+
+Deno.test('vapidPublicKey derives the RFC 8291 public points', () => {
+  assertEq(vapidPublicKey(RFC_AS_PRIVATE), RFC_AS_PUBLIC)
+  assertEq(
+    vapidPublicKey('q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94'),
+    RFC_UA_PUBLIC,
+  )
+})
+
+Deno.test('vapidPublicKey matches the OpenSSL 2G vector', () => {
+  const d = new Uint8Array(32)
+  d[31] = 2
+  const pub = b64d(vapidPublicKey(b64url(d)))
+  const hex = [...pub].map(b => b.toString(16).padStart(2, '0')).join('')
+  assertEq(
+    hex,
+    '047cf27b188d034f7e8a52380304b51ac3c08969e277f21b35a60b48fc47669978'
+      + '07775510db8ed040293d9ac69f7430dbba7dade63ce982299e04b79d227873d1',
+  )
 })
 
 Deno.test('authorization header carries a valid ES256 JWT', async () => {
-  const vapid = await generateVapidKeys()
+  const privateKey = await generateVapidKeys()
   const subscriber = 'mailto:admin@example.com'
   let request: Request | undefined
   const fetchMock = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -277,7 +297,7 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
   await send(
     RFC_SUBSCRIPTION,
     'test',
-    { vapid: vapid.privateKey, subscriber, ttl: 3600 },
+    { vapid: privateKey, subscriber, ttl: 3600 },
     { fetch: fetchMock },
   )
   assert(request)
@@ -313,9 +333,8 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
   )
   assert(valid, 'JWT signature does not verify')
 
-  // k is the public point derived from the private scalar; it must match the
-  // key pair WebCrypto generated.
-  assertEq(k, vapid.publicKey)
+  // k is the public point derived from the private scalar.
+  assertEq(k, vapidPublicKey(privateKey))
 })
 
 // send() behavior -------------------------------------------------------------
@@ -330,7 +349,7 @@ const SUBSCRIPTION: Subscription = {
 }
 
 Deno.test('send posts the encrypted record with the expected headers', async () => {
-  const vapid = await generateVapidKeys()
+  const privateKey = await generateVapidKeys()
   let request: Request | undefined
   const fetchMock = async (input: RequestInfo | URL, init?: RequestInit) => {
     request = new Request(input, init)
@@ -340,7 +359,7 @@ Deno.test('send posts the encrypted record with the expected headers', async () 
     SUBSCRIPTION,
     'Test',
     {
-      vapid: vapid.privateKey,
+      vapid: privateKey,
       subscriber: 'https://app.example.com/',
       ttl: 3600,
       topic: 'a-topic',
@@ -365,9 +384,9 @@ Deno.test('send posts the encrypted record with the expected headers', async () 
 })
 
 Deno.test('send throws PushError on endpoint errors', async () => {
-  const vapid = await generateVapidKeys()
+  const privateKey = await generateVapidKeys()
   const options = {
-    vapid: vapid.privateKey,
+    vapid: privateKey,
     subscriber: 'mailto:admin@example.com',
     ttl: 60,
   }
@@ -422,9 +441,9 @@ Deno.test('send throws PushError on endpoint errors', async () => {
 })
 
 Deno.test('send validates its inputs', async () => {
-  const vapid = await generateVapidKeys()
+  const privateKey = await generateVapidKeys()
   const options = {
-    vapid: vapid.privateKey,
+    vapid: privateKey,
     subscriber: 'mailto:admin@example.com',
     ttl: 60,
   }

@@ -8,14 +8,15 @@ browsers. No dependencies.
 ## Usage
 
 ```ts
-import { generateVapidKeys, send } from './mod.ts'
+import { generateVapidKeys, send, vapidPublicKey } from './mod.ts'
 
-const keys = await generateVapidKeys()
-// keys.publicKey goes to the frontend for pushManager.subscribe,
-// keys.privateKey (JWK) is stored server-side.
+const privateKey = await generateVapidKeys()
+const publicKey = vapidPublicKey(privateKey)
+// publicKey goes to the frontend for pushManager.subscribe,
+// privateKey (base64url raw scalar) is stored server-side.
 
 await send(subscription, JSON.stringify({ title: 'Hello' }), {
-  vapid: keys.privateKey,
+  vapid: privateKey,
   subscriber: 'mailto:admin@example.com',
   ttl: 60,
 })
@@ -27,7 +28,8 @@ await send(subscription, JSON.stringify({ title: 'Hello' }), {
 
 ## API
 
-- `generateVapidKeys()` — new VAPID key pair as `{ publicKey, privateKey }`
+- `generateVapidKeys()` — new VAPID private key (base64url raw scalar)
+- `vapidPublicKey(privateKey)` — derive the base64url raw public point
 - `encrypt(subscription, message, options, deps?)` — build the request without sending
 - `send(subscription, message, options, deps?)` — encrypt and POST
 
@@ -40,7 +42,7 @@ await send(subscription, JSON.stringify({ title: 'Hello' }), {
 deno task dev
 ```
 
-Serves the demo page on http://127.0.0.1:8000. A VAPID key pair is generated
-and cached in `.vapid-key.json` on first run.
+Serves the demo page on http://127.0.0.1:8000. A VAPID key is generated and
+cached in `.vapid-key` on first run.
 
 Ported from [daaku/webpush](https://github.com/daaku/webpush) (MIT).

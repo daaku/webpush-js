@@ -1,12 +1,12 @@
 // Example web push server: serves the demo page, generates VAPID keys on
 // first run, and schedules pushes against subscriptions posted by the page.
 
-import { generateVapidKeys, send } from '../mod.ts'
-import type { Subscription, VapidKeys } from '../mod.ts'
+import { generateVapidKeys, send, vapidPublicKey } from '../mod.ts'
+import type { Subscription } from '../mod.ts'
 
 const PORT = Number(Deno.env.get('PORT') ?? 8000)
 const HOST = Deno.env.get('HOST') ?? '127.0.0.1'
-const VAPID_FILE = '.vapid-key.json'
+const VAPID_FILE = '.vapid-key'
 const ROOT = import.meta.dirname ?? '.'
 
 const MIME: Record<string, string> = {
@@ -15,14 +15,17 @@ const MIME: Record<string, string> = {
   '.webmanifest': 'application/manifest+json',
 }
 
-async function loadVapidKeys(): Promise<VapidKeys> {
+async function loadVapidKeys(): Promise<
+  { privateKey: string; publicKey: string }
+> {
   try {
-    return JSON.parse(await Deno.readTextFile(VAPID_FILE)) as VapidKeys
+    const privateKey = (await Deno.readTextFile(VAPID_FILE)).trim()
+    return { privateKey, publicKey: vapidPublicKey(privateKey) }
   } catch {
-    const keys = await generateVapidKeys()
-    await Deno.writeTextFile(VAPID_FILE, JSON.stringify(keys, null, 2))
-    console.log(`generated new VAPID keys, stored in ${VAPID_FILE}`)
-    return keys
+    const privateKey = await generateVapidKeys()
+    await Deno.writeTextFile(VAPID_FILE, privateKey)
+    console.log(`generated new VAPID key, stored in ${VAPID_FILE}`)
+    return { privateKey, publicKey: vapidPublicKey(privateKey) }
   }
 }
 
