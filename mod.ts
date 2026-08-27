@@ -155,9 +155,17 @@ interface VapidKeyMaterial {
   publicKey: Uint8Array<ArrayBuffer>
 }
 
+const MAX_CACHED_KEYS = 10
+
 // WebCrypto cannot import raw ECDSA private keys, so the scalar is expanded
-// into a full JWK (x and y via p256Point) before it can sign.
+// into a full JWK (x and y via p256Point) before it can sign. Cache per key:
+// the derivation costs ~20ms and deployments typically use a single VAPID key.
+// Strings can't be WeakMap keys, hence the capped Map.
+const vapidKeyCache = new Map<string, VapidKeyMaterial>()
+
 function vapidKeyMaterial(privateKey: string): VapidKeyMaterial {
+  let material = vapidKeyCache.get(privateKey)
+  if (material) return material
   const d = b64decode(privateKey)
   if (d.length !== 32) {
     throw new Error('invalid VAPID private key, expected 32 bytes')
@@ -169,7 +177,7 @@ function vapidKeyMaterial(privateKey: string): VapidKeyMaterial {
   const [x, y] = p256Point(scalar)
   const xBytes = bigintToBytes(x)
   const yBytes = bigintToBytes(y)
-  return {
+  material = {
     jwk: {
       kty: 'EC',
       crv: 'P-256',
@@ -179,6 +187,11 @@ function vapidKeyMaterial(privateKey: string): VapidKeyMaterial {
     },
     publicKey: concat(new Uint8Array([4]), xBytes, yBytes),
   }
+  if (vapidKeyCache.size >= MAX_CACHED_KEYS) {
+    vapidKeyCache.delete(vapidKeyCache.keys().next().value!)
+  }
+  vapidKeyCache.set(privateKey, material)
+  return material
 }
 
 /** Generate a new VAPID private key (base64url raw scalar). */
