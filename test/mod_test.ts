@@ -346,7 +346,7 @@ const SUBSCRIPTION: Subscription = {
   },
 }
 
-Deno.test('vapid key material is imported and cached once per JWK', async () => {
+Deno.test('vapid key material is imported and cached once per JWK or string', async () => {
   const original = crypto.subtle.importKey.bind(crypto.subtle)
   let ecdsaImports = 0
   const wrapped = ((...args: Parameters<typeof original>) => {
@@ -360,19 +360,29 @@ Deno.test('vapid key material is imported and cached once per JWK', async () => 
   try {
     const keys = await generateVapidKeys()
     const publicKey = await vapidPublicKey(keys)
-    const options = {
-      vapid: keys,
-      subscriber: 'mailto:admin@example.com',
-      ttl: 60,
-    }
+    const subscriber = 'mailto:admin@example.com'
     const fetchMock = () =>
       Promise.resolve(new Response(null, { status: 201 }))
     for (let i = 0; i < 3; i++) {
-      await send(SUBSCRIPTION, 'x', options, { fetch: fetchMock })
+      await send(SUBSCRIPTION, 'x', { vapid: keys, subscriber, ttl: 60 }, {
+        fetch: fetchMock,
+      })
       assertEq(await vapidPublicKey(keys), publicKey)
     }
     // Repeated sends with the same JWK object reuse the cached import.
     assertEq(ecdsaImports, 1)
+    const serialized = JSON.stringify(keys)
+    for (let i = 0; i < 3; i++) {
+      await send(
+        SUBSCRIPTION,
+        'x',
+        { vapid: serialized, subscriber, ttl: 60 },
+        { fetch: fetchMock },
+      )
+      assertEq(await vapidPublicKey(serialized), publicKey)
+    }
+    // One import for the JWK object, one for the serialized string.
+    assertEq(ecdsaImports, 2)
   } finally {
     crypto.subtle.importKey = original
   }

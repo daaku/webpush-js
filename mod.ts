@@ -93,21 +93,27 @@ interface VapidKeyMaterial {
   publicKey: string // base64url raw public point, as sent in the k= parameter
 }
 
-// Keyed by the caller's JWK object, so entries are dropped once the app
-// releases its configuration. JSON-serialized strings are parsed per call.
-// The cached promise also deduplicates concurrent imports of the same key.
+// Keyed by the caller's JWK object; the cached promise deduplicates
+// concurrent imports.
 const vapidKeyCache = new WeakMap<JsonWebKey, Promise<VapidKeyMaterial>>()
+const vapidKeyStringCache = new Map<string, Promise<VapidKeyMaterial>>()
 
 function vapidKeyMaterial(
   vapid: JsonWebKey | string,
 ): Promise<VapidKeyMaterial> {
-  const jwk = typeof vapid === 'string'
-    ? JSON.parse(vapid) as JsonWebKey
-    : vapid
-  let material = vapidKeyCache.get(jwk)
-  if (material) return material
-  material = importVapidKey(jwk)
-  vapidKeyCache.set(jwk, material)
+  if (typeof vapid === 'string') {
+    let material = vapidKeyStringCache.get(vapid)
+    if (!material) {
+      material = importVapidKey(JSON.parse(vapid) as JsonWebKey)
+      vapidKeyStringCache.set(vapid, material)
+    }
+    return material
+  }
+  let material = vapidKeyCache.get(vapid)
+  if (!material) {
+    material = importVapidKey(vapid)
+    vapidKeyCache.set(vapid, material)
+  }
   return material
 }
 
