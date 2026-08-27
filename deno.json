@@ -1,4 +1,8 @@
 {
+  "name": "@daaku/webpush",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": "./mod.ts",
   "tasks": {
     "dev": "deno run --allow-env --allow-net --allow-read --allow-write example/server.ts"
   }
