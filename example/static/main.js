@@ -4,16 +4,6 @@ const show = text => {
   msg.innerText = text
 }
 
-function base64urlDecode(s) {
-  const bin = atob(
-    s.replace(/-/g, '+').replace(/_/g, '/').padEnd(
-      Math.ceil(s.length / 4) * 4,
-      '=',
-    ),
-  )
-  return Uint8Array.from(bin, c => c.charCodeAt(0))
-}
-
 async function refresh() {
   const registration = await navigator.serviceWorker.register(
     '/service-worker.js',
@@ -34,7 +24,9 @@ document.querySelector('#send-push').addEventListener('click', async () => {
   const registration = await navigator.serviceWorker.getRegistration()
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: base64urlDecode(publicKey),
+    applicationServerKey: Uint8Array.fromBase64(publicKey, {
+      alphabet: 'base64url',
+    }),
   })
   const res = await fetch('/push', {
     method: 'POST',
