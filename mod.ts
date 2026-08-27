@@ -67,12 +67,8 @@ export interface PushError extends Error {
   location: string
 }
 
-// base64 and byte helpers --------------------------------------------------
-
 function b64urlEncode(bytes: Uint8Array): string {
-  let bin = ''
-  for (const byte of bytes) bin += String.fromCharCode(byte)
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return bytes.toBase64({ alphabet: 'base64url', omitPadding: true })
 }
 
 // Permissive: accepts URL-safe or standard alphabets, with or without padding.
