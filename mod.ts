@@ -12,27 +12,44 @@ const MAX_RECORD_SIZE = 4096
 const MIN_OVERHEAD = 103 // 86-byte header + 1 delimiter + 16-byte GCM tag
 const JWT_TTL = 12 * 60 * 60
 
-const URGENCIES = ['very-low', 'low', 'normal', 'high'] as const
+/**
+ * Push urgency values, per RFC 8030 §5.3.
+ * @internal
+ */
+export const URGENCIES = ['very-low', 'low', 'normal', 'high'] as const
 
+/** Push message urgency. */
 export type Urgency = (typeof URGENCIES)[number]
 
 /** A PushSubscription as delivered by the browser. */
 export interface Subscription {
+  /** Push endpoint URL. */
   endpoint: string
+  /** Client keys. */
   keys: {
+    /** Authentication secret, base64url. */
     auth: string
+    /** Client public key, base64url. */
     p256dh: string
   }
 }
 
+/** Options for encrypt() and send(). */
 export interface SendOptions {
-  vapid: JsonWebKey | string // VAPID private key as JWK or JSON-serialized JWK
-  subscriber: string // https URL or mailto: address identifying the application
-  ttl: number // seconds
+  /** VAPID private key as JWK or JSON-serialized JWK. */
+  vapid: JsonWebKey | string
+  /** https URL or mailto: address identifying the application. */
+  subscriber: string
+  /** Message lifetime in seconds. */
+  ttl: number
+  /** Topic for collapsing notifications (RFC 8030 §5.4). */
   topic?: string
+  /** Push urgency. */
   urgency?: Urgency
-  recordSize?: number // default 4096
-  vapidExpiration?: Date // default now + 12 hours
+  /** Encrypted record size; default 4096. */
+  recordSize?: number
+  /** VAPID token expiration; default now + 12 hours. */
+  vapidExpiration?: Date
 }
 
 /** Injectables for tests: fetch replaces the network, keyPair and salt pin the encryption.
@@ -45,17 +62,25 @@ interface Deps {
 
 /** The encrypted request produced by encrypt(). */
 export interface EncryptedRequest {
+  /** Encrypted payload: an RFC 8188 aes128gcm record. */
   body: Uint8Array<ArrayBuffer>
+  /** Headers for POSTing to the endpoint. */
   headers: Record<string, string>
+  /** Push endpoint URL. */
   endpoint: string
 }
 
 /** Thrown by send() when the push endpoint responds with a non-2xx status. */
 export interface PushError extends Error {
+  /** HTTP status code from the endpoint. */
   statusCode: number
+  /** Response body text. */
   body: string
+  /** Endpoint hostname. */
   endpointHost: string
+  /** True when the subscription is no longer valid (404 or 410). */
   permanent: boolean
+  /** Location header from the endpoint, if present. */
   location: string
 }
 
