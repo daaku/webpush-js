@@ -67,15 +67,13 @@ const RFC_AS_PUBLIC =
 const RFC_BODY =
   'DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN'
 
-const RFC_AS_PRIVATE = 'yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw'
-
 // JWK forms of the RFC's private keys, public points derived from the scalars.
 const RFC_AS_JWK = {
   kty: 'EC',
   crv: 'P-256',
   x: '_jP0qw3qcZFNtVgj9ztUlI9BMG2SBzLbuaWaUyhkgiA',
   y: 'Dll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8',
-  d: RFC_AS_PRIVATE,
+  d: 'yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw',
 }
 const RFC_UA_JWK = {
   kty: 'EC',
@@ -112,7 +110,7 @@ async function rfcDeps(): Promise<Deps> {
 }
 
 const RFC_OPTIONS = {
-  vapid: RFC_AS_PRIVATE,
+  vapid: RFC_AS_JWK,
   subscriber: 'https://example.com/',
   ttl: 60,
 }
@@ -257,37 +255,34 @@ Deno.test('body decrypts like a browser and matches RFC intermediates', async ()
 
 // VAPID keys and JWT ---------------------------------------------------------
 
-Deno.test('generateVapidKeys returns a private key, vapidPublicKey derives the rest', async () => {
-  const privateKey = await generateVapidKeys()
-  assertEq(b64d(privateKey).length, 32)
-  const publicKey = vapidPublicKey(privateKey)
-  const pub = b64d(publicKey)
+Deno.test('generateVapidKeys returns a JWK private key and matching public key', async () => {
+  const keys = await generateVapidKeys()
+  const pub = b64d(keys.publicKey)
   assertEq(pub.length, 65)
   assertEq(pub[0], 4)
-})
-
-Deno.test('vapidPublicKey derives the RFC 8291 public points', () => {
-  assertEq(vapidPublicKey(RFC_AS_PRIVATE), RFC_AS_PUBLIC)
+  assertEq(keys.privateKey.kty, 'EC')
+  assertEq(keys.privateKey.crv, 'P-256')
+  assert(keys.privateKey.d)
+  // x and y of the JWK must assemble into the raw public point.
   assertEq(
-    vapidPublicKey('q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94'),
-    RFC_UA_PUBLIC,
+    keys.publicKey,
+    b64url(
+      concat(
+        new Uint8Array([4]),
+        b64d(keys.privateKey.x ?? ''),
+        b64d(keys.privateKey.y ?? ''),
+      ),
+    ),
   )
 })
 
-Deno.test('vapidPublicKey matches the OpenSSL 2G vector', () => {
-  const d = new Uint8Array(32)
-  d[31] = 2
-  const pub = b64d(vapidPublicKey(b64url(d)))
-  const hex = [...pub].map(b => b.toString(16).padStart(2, '0')).join('')
-  assertEq(
-    hex,
-    '047cf27b188d034f7e8a52380304b51ac3c08969e277f21b35a60b48fc47669978'
-      + '07775510db8ed040293d9ac69f7430dbba7dade63ce982299e04b79d227873d1',
-  )
+Deno.test('vapidPublicKey marshals JWK x and y into the raw public point', () => {
+  assertEq(vapidPublicKey(RFC_AS_JWK), RFC_AS_PUBLIC)
+  assertEq(vapidPublicKey(JSON.stringify(RFC_AS_JWK)), RFC_AS_PUBLIC)
 })
 
 Deno.test('authorization header carries a valid ES256 JWT', async () => {
-  const privateKey = await generateVapidKeys()
+  const keys = await generateVapidKeys()
   const subscriber = 'mailto:admin@example.com'
   let request: Request | undefined
   const fetchMock = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -297,7 +292,7 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
   await send(
     RFC_SUBSCRIPTION,
     'test',
-    { vapid: privateKey, subscriber, ttl: 3600 },
+    { vapid: keys.privateKey, subscriber, ttl: 3600 },
     { fetch: fetchMock },
   )
   assert(request)
@@ -333,8 +328,10 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
   )
   assert(valid, 'JWT signature does not verify')
 
-  // k is the public point derived from the private scalar.
-  assertEq(k, vapidPublicKey(privateKey))
+  // k is the raw public point marshaled from the JWK; it must equal the
+  // public key WebCrypto generated alongside the private key.
+  assertEq(k, vapidPublicKey(keys.privateKey))
+  assertEq(k, keys.publicKey)
 })
 
 // send() behavior -------------------------------------------------------------
@@ -349,7 +346,7 @@ const SUBSCRIPTION: Subscription = {
 }
 
 Deno.test('send posts the encrypted record with the expected headers', async () => {
-  const privateKey = await generateVapidKeys()
+  const keys = await generateVapidKeys()
   let request: Request | undefined
   const fetchMock = async (input: RequestInfo | URL, init?: RequestInit) => {
     request = new Request(input, init)
@@ -359,7 +356,7 @@ Deno.test('send posts the encrypted record with the expected headers', async () 
     SUBSCRIPTION,
     'Test',
     {
-      vapid: privateKey,
+      vapid: keys.privateKey,
       subscriber: 'https://app.example.com/',
       ttl: 3600,
       topic: 'a-topic',
@@ -384,9 +381,9 @@ Deno.test('send posts the encrypted record with the expected headers', async () 
 })
 
 Deno.test('send throws PushError on endpoint errors', async () => {
-  const privateKey = await generateVapidKeys()
+  const keys = await generateVapidKeys()
   const options = {
-    vapid: privateKey,
+    vapid: keys.privateKey,
     subscriber: 'mailto:admin@example.com',
     ttl: 60,
   }
@@ -441,9 +438,9 @@ Deno.test('send throws PushError on endpoint errors', async () => {
 })
 
 Deno.test('send validates its inputs', async () => {
-  const privateKey = await generateVapidKeys()
+  const keys = await generateVapidKeys()
   const options = {
-    vapid: privateKey,
+    vapid: keys.privateKey,
     subscriber: 'mailto:admin@example.com',
     ttl: 60,
   }
@@ -496,11 +493,27 @@ Deno.test('send validates its inputs', async () => {
     send({ ...SUBSCRIPTION, endpoint: 'not a url' }, 'x', options)
   )
   await assertRejects(() =>
-    send(SUBSCRIPTION, 'x', { ...options, vapid: 'AAAA' })
+    send(SUBSCRIPTION, 'x', { ...options, vapid: 'not json' })
   )
   await assertRejects(() =>
-    send(SUBSCRIPTION, 'x', { ...options, vapid: 'A'.repeat(43) })
+    send(SUBSCRIPTION, 'x', { ...options, vapid: {} as JsonWebKey })
   )
   const { ttl: _ttl, ...noTtl } = options
   await assertRejects(() => send(SUBSCRIPTION, 'x', noTtl as SendOptions))
+})
+
+Deno.test('accepts a JSON-serialized VAPID private key', async () => {
+  const keys = await generateVapidKeys()
+  let sent = false
+  await send(SUBSCRIPTION, 'x', {
+    vapid: JSON.stringify(keys.privateKey),
+    subscriber: 'https://app.example.com/',
+    ttl: 60,
+  }, {
+    fetch: async () => {
+      sent = true
+      return new Response(null, { status: 201 })
+    },
+  })
+  assert(sent)
 })

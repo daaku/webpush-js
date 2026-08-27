@@ -10,13 +10,12 @@ browsers. No dependencies.
 ```ts
 import { generateVapidKeys, send, vapidPublicKey } from './mod.ts'
 
-const privateKey = await generateVapidKeys()
-const publicKey = vapidPublicKey(privateKey)
-// publicKey goes to the frontend for pushManager.subscribe,
-// privateKey (base64url raw scalar) is stored server-side.
+const keys = await generateVapidKeys()
+// keys.publicKey goes to the frontend for pushManager.subscribe,
+// keys.privateKey (JWK) is stored server-side.
 
 await send(subscription, JSON.stringify({ title: 'Hello' }), {
-  vapid: privateKey,
+  vapid: keys.privateKey,
   subscriber: 'mailto:admin@example.com',
   ttl: 60,
 })
@@ -28,13 +27,15 @@ await send(subscription, JSON.stringify({ title: 'Hello' }), {
 
 ## API
 
-- `generateVapidKeys()` — new VAPID private key (base64url raw scalar)
-- `vapidPublicKey(privateKey)` — derive the base64url raw public point
+- `generateVapidKeys()` — new VAPID key pair: `{ publicKey, privateKey }`
+- `vapidPublicKey(vapid)` — raw public point from a JWK (or JSON-serialized JWK)
 - `encrypt(subscription, message, options, deps?)` — build the request without sending
 - `send(subscription, message, options, deps?)` — encrypt and POST
 
-`deps.fetch` injects the network call for mocking; `deps.keyPair` and
-`deps.salt` pin the encryption for deterministic tests.
+`options.vapid` accepts the private key as a `JsonWebKey` or a JSON string, so
+it can be passed straight from storage. `deps.fetch` injects the network call
+for mocking; `deps.keyPair` and `deps.salt` pin the encryption for
+deterministic tests.
 
 ## Example
 
@@ -42,7 +43,7 @@ await send(subscription, JSON.stringify({ title: 'Hello' }), {
 deno task dev
 ```
 
-Serves the demo page on http://127.0.0.1:8000. A VAPID key is generated and
-cached in `.vapid-key` on first run.
+Serves the demo page on http://127.0.0.1:8000. A VAPID key pair is generated
+and cached in `.vapid-key.json` on first run.
 
 Ported from [daaku/webpush](https://github.com/daaku/webpush) (MIT).
