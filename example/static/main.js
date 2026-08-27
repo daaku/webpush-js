@@ -56,7 +56,7 @@ document.querySelector('#unsubscribe').addEventListener('click', async () => {
   refresh()
 })
 
-window.addEventListener('unhandledrejection', ev => show(ev.reason))
-window.addEventListener('error', ev => show(ev.error))
+globalThis.addEventListener('unhandledrejection', ev => show(ev.reason))
+globalThis.addEventListener('error', ev => show(ev.error))
 
 refresh()
