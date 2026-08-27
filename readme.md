@@ -27,15 +27,12 @@ await send(subscription, JSON.stringify({ title: 'Hello' }), {
 
 ## API
 
-- `generateVapidKeys()` — new VAPID key pair: `{ publicKey, privateKey }`
-- `vapidPublicKey(vapid)` — raw public point (base64url) from a JWK (or JSON-serialized JWK)
-- `encrypt(subscription, message, options, deps?)` — build the request without sending
-- `send(subscription, message, options, deps?)` — encrypt and POST
+- `generateVapidKeys()` - new VAPID key pair: `{ publicKey, privateKey }`
+- `vapidPublicKey(vapid)` - raw public point (base64url) from a JWK (or JSON-serialized JWK)
+- `encrypt(subscription, message, options, deps?)` - build the request without sending
+- `send(subscription, message, options, deps?)` - encrypt and POST
 
-`options.vapid` accepts the private key as a `JsonWebKey` or a JSON string, so
-it can be passed straight from storage. `deps.fetch` injects the network call
-for mocking; `deps.keyPair` and `deps.salt` pin the encryption for
-deterministic tests.
+`options.vapid` accepts the private key as a `JsonWebKey` or a JSON string.
 
 ## Example
 
@@ -43,7 +40,5 @@ deterministic tests.
 deno task dev
 ```
 
-Serves the demo page on http://127.0.0.1:8000. A VAPID key pair is generated
-and cached in `.vapid-key.json` on first run.
-
-Ported from [daaku/webpush](https://github.com/daaku/webpush) (MIT).
+Serves the demo page on http://127.0.0.1:8000.
+A VAPID key pair is generated and cached in `.vapid-key.json` on first run.
