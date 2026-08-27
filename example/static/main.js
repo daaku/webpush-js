@@ -17,9 +17,7 @@ function base64urlDecode(s) {
 async function refresh() {
   const registration = await navigator.serviceWorker.register(
     '/service-worker.js',
-    {
-      updateViaCache: 'none',
-    },
+    { updateViaCache: 'none' },
   )
   if (!registration.pushManager) {
     document.body.className = 'push-unavailable'
