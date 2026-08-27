@@ -1,6 +1,6 @@
 // Web Push (RFC 8030) client built on WebCrypto: aes128gcm message encryption
 // (RFC 8291, RFC 8188) with VAPID authentication (RFC 8292).
-// VAPID keys are JWK; pass any global dependency (fetch) explicitly for mocking.
+// VAPID keys are JWK.
 
 const textEncoder = new TextEncoder()
 
@@ -86,15 +86,12 @@ function concat(...parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
   return out
 }
 
-// VAPID (RFC 8292) ----------------------------------------------------------
-
+// Derived from VAPID private key as stored/provided by the client (RFC 8292)
 interface VapidKeyMaterial {
   key: CryptoKey // ECDSA P-256 key imported from the JWK
   publicKey: string // base64url raw public point, as sent in the k= parameter
 }
 
-// Keyed by the caller's JWK object; the cached promise deduplicates
-// concurrent imports.
 const vapidKeyCache = new WeakMap<JsonWebKey, Promise<VapidKeyMaterial>>()
 const vapidKeyStringCache = new Map<string, Promise<VapidKeyMaterial>>()
 
@@ -102,6 +99,7 @@ function vapidKeyMaterial(
   vapid: JsonWebKey | string,
 ): Promise<VapidKeyMaterial> {
   if (typeof vapid === 'string') {
+    // WeakMap doesn't work with strings. So a secondary cache.
     let material = vapidKeyStringCache.get(vapid)
     if (!material) {
       material = importVapidKey(JSON.parse(vapid) as JsonWebKey)
@@ -203,8 +201,7 @@ async function authHeader(
   return `vapid t=${jwt}, k=${publicKey}`
 }
 
-// Message encryption (RFC 8188 aes128gcm) ------------------------------------
-
+// Message encryption (RFC 8188 aes128gcm)
 async function encryptRecord(
   uaPublic: Uint8Array<ArrayBuffer>,
   authSecret: Uint8Array<ArrayBuffer>,
@@ -275,8 +272,6 @@ async function encryptRecord(
   header.set(appPublic, 21)
   return concat(header, ciphertext)
 }
-
-// Public API -----------------------------------------------------------------
 
 /**
  * Build the encrypted request for a push notification without sending it.
