@@ -255,22 +255,22 @@ Deno.test('body decrypts like a browser and matches RFC intermediates', async ()
 
 // VAPID keys and JWT ---------------------------------------------------------
 
-Deno.test('generateVapidKeys returns a JWK private key and matching public key', async () => {
+Deno.test('generateVapidKeys returns a private JWK; vapidPublicKey derives its public key', async () => {
   const keys = await generateVapidKeys()
-  const pub = b64d(keys.publicKey)
+  assertEq(keys.kty, 'EC')
+  assertEq(keys.crv, 'P-256')
+  assert(keys.d)
+  const pub = b64d(await vapidPublicKey(keys))
   assertEq(pub.length, 65)
   assertEq(pub[0], 4)
-  assertEq(keys.privateKey.kty, 'EC')
-  assertEq(keys.privateKey.crv, 'P-256')
-  assert(keys.privateKey.d)
   // x and y of the JWK must assemble into the raw public point.
   assertEq(
-    keys.publicKey,
+    await vapidPublicKey(keys),
     b64url(
       concat(
         new Uint8Array([4]),
-        b64d(keys.privateKey.x ?? ''),
-        b64d(keys.privateKey.y ?? ''),
+        b64d(keys.x ?? ''),
+        b64d(keys.y ?? ''),
       ),
     ),
   )
@@ -283,6 +283,7 @@ Deno.test('vapidPublicKey marshals JWK x and y into the raw public point', async
 
 Deno.test('authorization header carries a valid ES256 JWT', async () => {
   const keys = await generateVapidKeys()
+  const publicKey = await vapidPublicKey(keys)
   const subscriber = 'mailto:admin@example.com'
   let request: Request | undefined
   const fetchMock = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -292,7 +293,7 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
   await send(
     RFC_SUBSCRIPTION,
     'test',
-    { vapid: keys.privateKey, subscriber, ttl: 3600 },
+    { vapid: keys, subscriber, ttl: 3600 },
     { fetch: fetchMock },
   )
   assert(request)
@@ -330,8 +331,8 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
 
   // k is the raw public point marshaled from the JWK; it must equal the
   // public key WebCrypto generated alongside the private key.
-  assertEq(k, await vapidPublicKey(keys.privateKey))
-  assertEq(k, keys.publicKey)
+  assertEq(k, await vapidPublicKey(keys))
+  assertEq(k, publicKey)
 })
 
 // send() behavior -------------------------------------------------------------
@@ -358,8 +359,9 @@ Deno.test('vapid key material is imported and cached once per JWK', async () => 
   crypto.subtle.importKey = wrapped
   try {
     const keys = await generateVapidKeys()
+    const publicKey = await vapidPublicKey(keys)
     const options = {
-      vapid: keys.privateKey,
+      vapid: keys,
       subscriber: 'mailto:admin@example.com',
       ttl: 60,
     }
@@ -367,7 +369,7 @@ Deno.test('vapid key material is imported and cached once per JWK', async () => 
       Promise.resolve(new Response(null, { status: 201 }))
     for (let i = 0; i < 3; i++) {
       await send(SUBSCRIPTION, 'x', options, { fetch: fetchMock })
-      assertEq(await vapidPublicKey(keys.privateKey), keys.publicKey)
+      assertEq(await vapidPublicKey(keys), publicKey)
     }
     // Repeated sends with the same JWK object reuse the cached import.
     assertEq(ecdsaImports, 1)
@@ -387,7 +389,7 @@ Deno.test('send posts the encrypted record with the expected headers', async () 
     SUBSCRIPTION,
     'Test',
     {
-      vapid: keys.privateKey,
+      vapid: keys,
       subscriber: 'https://app.example.com/',
       ttl: 3600,
       topic: 'a-topic',
@@ -414,7 +416,7 @@ Deno.test('send posts the encrypted record with the expected headers', async () 
 Deno.test('send throws PushError on endpoint errors', async () => {
   const keys = await generateVapidKeys()
   const options = {
-    vapid: keys.privateKey,
+    vapid: keys,
     subscriber: 'mailto:admin@example.com',
     ttl: 60,
   }
@@ -471,7 +473,7 @@ Deno.test('send throws PushError on endpoint errors', async () => {
 Deno.test('send validates its inputs', async () => {
   const keys = await generateVapidKeys()
   const options = {
-    vapid: keys.privateKey,
+    vapid: keys,
     subscriber: 'mailto:admin@example.com',
     ttl: 60,
   }
@@ -537,7 +539,7 @@ Deno.test('accepts a JSON-serialized VAPID private key', async () => {
   const keys = await generateVapidKeys()
   let sent = false
   await send(SUBSCRIPTION, 'x', {
-    vapid: JSON.stringify(keys.privateKey),
+    vapid: JSON.stringify(keys),
     subscriber: 'https://app.example.com/',
     ttl: 60,
   }, {

@@ -25,12 +25,6 @@ export interface Subscription {
   }
 }
 
-/** VAPID keys. Give publicKey to the frontend, keep privateKey on the server. */
-export interface VapidKeys {
-  publicKey: string // base64url raw public point
-  privateKey: JsonWebKey
-}
-
 export interface SendOptions {
   vapid: JsonWebKey | string // VAPID private key as JWK or JSON-serialized JWK
   subscriber: string // https URL or mailto: address identifying the application
@@ -137,18 +131,14 @@ async function importVapidKey(jwk: JsonWebKey): Promise<VapidKeyMaterial> {
   }
 }
 
-/** Generate a new VAPID key pair. Store privateKey, share publicKey. */
-export async function generateVapidKeys(): Promise<VapidKeys> {
+/** Generate a new VAPID key pair, returning the private key as a JWK. */
+export async function generateVapidKeys(): Promise<JsonWebKey> {
   const pair = await crypto.subtle.generateKey(
     { name: 'ECDSA', namedCurve: 'P-256' },
     true,
     ['sign'],
   )
-  const privateKey = await crypto.subtle.exportKey('jwk', pair.privateKey)
-  const publicKey = b64urlEncode(
-    new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey)),
-  )
-  return { publicKey, privateKey }
+  return await crypto.subtle.exportKey('jwk', pair.privateKey)
 }
 
 /** The base64url raw public point for a VAPID private key (JWK or JSON). */

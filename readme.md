@@ -10,12 +10,12 @@ browsers. No dependencies.
 ```ts
 import { generateVapidKeys, send, vapidPublicKey } from './mod.ts'
 
-const keys = await generateVapidKeys()
-// keys.publicKey goes to the frontend for pushManager.subscribe,
-// keys.privateKey (JWK) is stored server-side.
+const privateKey = await generateVapidKeys()
+// vapidPublicKey(privateKey) goes to the frontend for pushManager.subscribe,
+// privateKey (JWK) is stored server-side.
 
 await send(subscription, JSON.stringify({ title: 'Hello' }), {
-  vapid: keys.privateKey,
+  vapid: privateKey,
   subscriber: 'mailto:admin@example.com',
   ttl: 60,
 })
@@ -27,8 +27,8 @@ await send(subscription, JSON.stringify({ title: 'Hello' }), {
 
 ## API
 
-- `generateVapidKeys()` - new VAPID key pair: `{ publicKey, privateKey }`
-- `vapidPublicKey(vapid)` - raw public point (base64url) from a JWK (or JSON-serialized JWK)
+- `generateVapidKeys()` - new VAPID private key (JWK)
+- `vapidPublicKey(vapid)` - raw public point (base64url) derived from a JWK (or JSON-serialized JWK)
 - `encrypt(subscription, message, options, deps?)` - build the request without sending
 - `send(subscription, message, options, deps?)` - encrypt and POST
 
