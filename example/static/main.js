@@ -1,7 +1,9 @@
 const msg = document.getElementById('msg')
 const status = document.querySelector('.status')
-const show = text => {
-  msg.innerText = text
+const log = text => {
+  const pre = document.createElement('pre')
+  pre.textContent = text
+  msg.append(pre)
 }
 
 async function refresh() {
@@ -32,7 +34,7 @@ document.querySelector('#send-push').addEventListener('click', async () => {
     method: 'POST',
     body: JSON.stringify(subscription),
   })
-  show(res.ok ? 'Push scheduled. Check the server logs.' : await res.text())
+  log(res.ok ? 'Push scheduled. Check the server logs.' : await res.text())
   refresh()
 })
 
@@ -40,15 +42,15 @@ document.querySelector('#unsubscribe').addEventListener('click', async () => {
   const registration = await navigator.serviceWorker.getRegistration()
   const subscription = await registration.pushManager.getSubscription()
   if (!subscription) {
-    show('No existing subscription.')
+    log('No existing subscription.')
     return
   }
   await subscription.unsubscribe()
-  show('Unsubscribed.')
+  log('Unsubscribed.')
   refresh()
 })
 
-globalThis.addEventListener('unhandledrejection', ev => show(ev.reason))
-globalThis.addEventListener('error', ev => show(ev.error))
+globalThis.addEventListener('unhandledrejection', ev => log(ev.reason))
+globalThis.addEventListener('error', ev => log(ev.error))
 
 refresh()
