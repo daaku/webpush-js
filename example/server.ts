@@ -71,5 +71,3 @@ Deno.serve({ hostname: HOST, port: PORT }, async req => {
   }
   return serveFile(url.pathname)
 })
-
-console.log(`Serving on http://${HOST}:${PORT}`)
