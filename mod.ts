@@ -44,7 +44,8 @@ export interface SendOptions {
   vapidExpiration?: Date // default now + 12 hours
 }
 
-/** Injectables for tests: fetch replaces the network, keyPair and salt pin the encryption. */
+/** Injectables for tests: fetch replaces the network, keyPair and salt pin the encryption.
+ * @internal */
 export interface Deps {
   fetch?: typeof fetch
   keyPair?: CryptoKeyPair
@@ -68,11 +69,9 @@ export interface PushError extends Error {
 }
 
 function b64Alphabet(input: string) {
-  const isStd = (v: string) => v === '+' || v === '/'
-  const isURL = (v: string) => v === '-' || v === '_'
-  for (const char of input) {
-    if (isStd(char)) break
-    if (isURL(char)) return 'base64url'
+  for (const c of input) {
+    if (c === '+' || c === '/') return 'base64'
+    if (c === '-' || c === '_') return 'base64url'
   }
   return 'base64'
 }
