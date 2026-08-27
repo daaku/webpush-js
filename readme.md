@@ -28,7 +28,7 @@ await send(subscription, JSON.stringify({ title: 'Hello' }), {
 ## API
 
 - `generateVapidKeys()` — new VAPID key pair: `{ publicKey, privateKey }`
-- `vapidPublicKey(vapid)` — raw public point from a JWK (or JSON-serialized JWK)
+- `vapidPublicKey(vapid)` — raw public point (base64url) from a JWK (or JSON-serialized JWK)
 - `encrypt(subscription, message, options, deps?)` — build the request without sending
 - `send(subscription, message, options, deps?)` — encrypt and POST
 

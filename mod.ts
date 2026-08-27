@@ -96,7 +96,7 @@ function concat(...parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
 
 interface VapidKeyMaterial {
   key: CryptoKey // ECDSA P-256 key imported from the JWK
-  publicKey: Uint8Array<ArrayBuffer>
+  publicKey: string // base64url raw public point, as sent in the k= parameter
 }
 
 // Keyed by the caller's JWK object, so entries are dropped once the app
@@ -127,10 +127,12 @@ async function importVapidKey(jwk: JsonWebKey): Promise<VapidKeyMaterial> {
   )
   return {
     key,
-    publicKey: concat(
-      new Uint8Array([4]),
-      b64decode(jwk.x ?? ''),
-      b64decode(jwk.y ?? ''),
+    publicKey: b64urlEncode(
+      concat(
+        new Uint8Array([4]),
+        b64decode(jwk.x ?? ''),
+        b64decode(jwk.y ?? ''),
+      ),
     ),
   }
 }
@@ -153,7 +155,7 @@ export async function generateVapidKeys(): Promise<VapidKeys> {
 export async function vapidPublicKey(
   vapid: JsonWebKey | string,
 ): Promise<string> {
-  return b64urlEncode((await vapidKeyMaterial(vapid)).publicKey)
+  return (await vapidKeyMaterial(vapid)).publicKey
 }
 
 function b64urlJson(value: unknown): string {
@@ -202,7 +204,7 @@ async function authHeader(
     exp: Math.floor(expiration.getTime() / 1000),
     sub: subscriber,
   })
-  return `vapid t=${jwt}, k=${b64urlEncode(publicKey)}`
+  return `vapid t=${jwt}, k=${publicKey}`
 }
 
 // Message encryption (RFC 8188 aes128gcm) ------------------------------------
