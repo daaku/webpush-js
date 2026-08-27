@@ -14,10 +14,9 @@ Everything lives in `mod.ts`; runs in Deno, Node, and browsers.
 - `deno check example/server.ts` — type-checks the example server.
 - `deno task dev` — run the demo on http://127.0.0.1:8000 (writes
   `.vapid-key.json`, gitignored).
-- `deno lint` — has a pre-existing baseline of 8 findings (browser-only
-  `window` usage in `example/static/main.js`, `require-await` on async fetch
-  mocks in the tests). Don't add new findings; don't "fix" the baseline
-  without asking.
+- `deno lint` — clean. Don't add new findings. Fetch mocks in the tests
+  return `Promise.resolve(...)` instead of `async` to satisfy
+  `require-await`.
 - Do NOT run `deno fmt`: the tree deliberately uses single quotes and no
   semicolons, which `deno fmt` would rewrite wholesale.
 
