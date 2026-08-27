@@ -363,7 +363,8 @@ Deno.test('vapid key material is imported and cached once per JWK', async () => 
       subscriber: 'mailto:admin@example.com',
       ttl: 60,
     }
-    const fetchMock = async () => new Response(null, { status: 201 })
+    const fetchMock = () =>
+      Promise.resolve(new Response(null, { status: 201 }))
     for (let i = 0; i < 3; i++) {
       await send(SUBSCRIPTION, 'x', options, { fetch: fetchMock })
       assertEq(await vapidPublicKey(keys.privateKey), keys.publicKey)

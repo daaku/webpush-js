@@ -104,7 +104,7 @@ interface VapidKeyMaterial {
 // The cached promise also deduplicates concurrent imports of the same key.
 const vapidKeyCache = new WeakMap<JsonWebKey, Promise<VapidKeyMaterial>>()
 
-async function vapidKeyMaterial(
+function vapidKeyMaterial(
   vapid: JsonWebKey | string,
 ): Promise<VapidKeyMaterial> {
   const jwk = typeof vapid === 'string'
