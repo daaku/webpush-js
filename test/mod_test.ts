@@ -1,7 +1,7 @@
 // Tests against RFC 8291 appendix A test vectors and a mocked fetch.
 
 import { encrypt, generateVapidKey, send, vapidPublicKey } from '../mod.ts'
-import type { Deps, PushError, SendOptions, Subscription } from '../mod.ts'
+import type { PushError, SendOptions, Subscription } from '../mod.ts'
 
 const textEncoder = new TextEncoder()
 
@@ -91,7 +91,7 @@ const RFC_SUBSCRIPTION: Subscription = {
   },
 }
 
-async function rfcDeps(): Promise<Deps> {
+async function rfcDeps() {
   const privateKey = await crypto.subtle.importKey(
     'jwk',
     RFC_AS_JWK,
@@ -351,7 +351,10 @@ Deno.test('vapid key material is imported and cached once per JWK or string', as
   let ecdsaImports = 0
   const wrapped = ((...args: Parameters<typeof original>) => {
     const [format, , algorithm] = args
-    if ((format as string) === 'jwk' && (algorithm as { name: string }).name === 'ECDSA') {
+    if (
+      (format as string) === 'jwk'
+      && (algorithm as { name: string }).name === 'ECDSA'
+    ) {
       ecdsaImports++
     }
     return original(...args)
@@ -361,8 +364,7 @@ Deno.test('vapid key material is imported and cached once per JWK or string', as
     const keys = await generateVapidKey()
     const publicKey = await vapidPublicKey(keys)
     const subscriber = 'mailto:admin@example.com'
-    const fetchMock = () =>
-      Promise.resolve(new Response(null, { status: 201 }))
+    const fetchMock = () => Promise.resolve(new Response(null, { status: 201 }))
     for (let i = 0; i < 3; i++) {
       await send(SUBSCRIPTION, 'x', { vapid: keys, subscriber, ttl: 60 }, {
         fetch: fetchMock,
@@ -468,7 +470,9 @@ Deno.test('send throws PushError on endpoint errors', async () => {
     const error = await assertRejects(() =>
       send(SUBSCRIPTION, 'x', options, {
         fetch: () =>
-          Promise.resolve(new Response(c.body, { status: c.status, headers: c.headers })),
+          Promise.resolve(
+            new Response(c.body, { status: c.status, headers: c.headers }),
+          ),
       })
     ) as PushError
     assert(error instanceof Error)

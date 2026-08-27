@@ -37,7 +37,7 @@ export interface SendOptions {
 
 /** Injectables for tests: fetch replaces the network, keyPair and salt pin the encryption.
  * @internal */
-export interface Deps {
+interface Deps {
   fetch?: typeof fetch
   keyPair?: CryptoKeyPair
   salt?: Uint8Array
