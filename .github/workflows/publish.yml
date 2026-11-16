@@ -7,23 +7,23 @@ on:
         required: true
         default: 'minor'
 permissions:
-  id-token: write
+  id-token: write # Required for OIDC
   contents: write
 jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: denoland/setup-deno@v2
+      - uses: actions/setup-node@v7
         with:
-          cache-hash: ${{ hashFiles('**/deno.json') }}
-      - name: deno bump-version
+          node-version: current
+          registry-url: 'https://registry.npmjs.org'
+      - uses: actions/checkout@v7
+      - run: npm install
+      - name: Bump Version
         run: |
           git config --global user.name 'Naitik Shah'
           git config --global user.email 'daaku@users.noreply.github.com'
-          deno bump-version ${{ github.event.inputs.version }}
-          git commit -am "v$(deno eval 'console.log(JSON.parse(Deno.readTextFileSync("./deno.json")).version)')"
-          git tag "v$(deno eval 'console.log(JSON.parse(Deno.readTextFileSync("./deno.json")).version)')"
-          git push --follow-tags
-      - run: deno publish
+          npm version ${{ github.event.inputs.version }}
+          git push && git push --tags
+      - run: npm publish

@@ -6,28 +6,33 @@ Project-local instructions for agents working in this repo.
 
 Zero-dependency Web Push (RFC 8030) client built on WebCrypto: aes128gcm
 message encryption (RFC 8291, RFC 8188) with VAPID authentication (RFC 8292).
-Everything lives in `mod.ts`; runs in Deno, Node, and browsers.
+Everything lives in `src/index.ts`; runs in Node and browsers. ESM only,
+targets the latest Node (native TypeScript type stripping, no build step to
+run or test).
 
 ## Commands
 
-- `deno test` — the test suite; also type-checks. Always run after changes.
-- `deno check example/server.ts` — type-checks the example server.
-- `deno task dev` — run the demo on http://127.0.0.1:8000 (writes
-  `.vapid-key.json`, gitignored).
-- `deno lint` — clean. Don't add new findings. Fetch mocks in the tests
-  return `Promise.resolve(...)` instead of `async` to satisfy
-  `require-await`.
-- Do NOT run `deno fmt`: the tree deliberately uses single quotes and no
-  semicolons, which `deno fmt` would rewrite wholesale.
+- `npm install` — installs dev deps and runs `prepare` (`tsc`), which
+  type-checks `src/`, `test/` and `example/` and builds `dist/` (only
+  `dist/src` is published). Run `npx tsc` after changes.
+- `npm test` — the `node:test` suite (`test/*.test.ts`). Always run after
+  changes. Tests use `node:assert/strict`.
+- `npm run cover` — tests with Node's built-in coverage (what CI runs).
+- `npm run dev` — run the demo on http://127.0.0.1:8000 with `node --watch`
+  (writes `.vapid-key.json`, gitignored).
+- Style: single quotes, no semicolons (see `prettier` in `package.json`).
+  Fetch mocks in the tests return `Promise.resolve(...)` instead of `async`.
 
 ## Working here
 
 - TODOs live in `todo.md` (gitignored). Each top-list item becomes one commit
   with a brief message. On "continue", read `todo.md` first.
-- Hard constraint: zero dependencies. Use platform built-ins only (WebCrypto,
+- Hard constraint: zero runtime dependencies (TypeScript and `@types/node`
+  are the only dev dependencies). Only erasable TypeScript syntax (no enums, namespaces or
+  parameter properties) since Node strips types. Use platform built-ins only (WebCrypto,
   `TextEncoder`, `Uint8Array.fromBase64`/`toBase64`, `fetch`). Never hand-roll
   crypto — importKey/exportKey/deriveBits/sign for everything.
-- Keep `mod.ts` a single module with the public API on top-level exports.
+- Keep `src/index.ts` a single module with the public API on top-level exports.
 
 ## Architecture notes
 

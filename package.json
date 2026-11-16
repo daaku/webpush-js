@@ -1,0 +1,41 @@
+{
+  "name": "@daaku/webpush",
+  "author": "Naitik Shah <n@daaku.org>",
+  "version": "0.2.0",
+  "description": "Zero-dependency Web Push client built on WebCrypto.",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/daaku/webpush-js.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "prettier": {
+    "arrowParens": "avoid",
+    "semi": false,
+    "singleQuote": true,
+    "trailingComma": "all"
+  },
+  "scripts": {
+    "test": "node --test 'test/**/*.test.ts'",
+    "cover": "node --test --experimental-test-coverage 'test/**/*.test.ts' --test-coverage-include='src/**'",
+    "prepare": "tsc",
+    "dev": "node --watch example/server.ts"
+  },
+  "keywords": [
+    "webpush",
+    "push",
+    "vapid",
+    "aes128gcm",
+    "webcrypto"
+  ],
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}

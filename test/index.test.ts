@@ -1,7 +1,9 @@
 // Tests against RFC 8291 appendix A test vectors and a mocked fetch.
 
-import { encrypt, generateVapidKey, send, vapidPublicKey } from './mod.ts'
-import type { PushError, SendOptions, Subscription } from './mod.ts'
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { encrypt, generateVapidKey, send, vapidPublicKey } from '../src/index.ts'
+import type { PushError, SendOptions, Subscription } from '../src/index.ts'
 
 const textEncoder = new TextEncoder()
 
@@ -31,28 +33,6 @@ function concat(...parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
     offset += part.length
   }
   return out
-}
-
-function assert(
-  condition: unknown,
-  message = 'assertion failed',
-): asserts condition {
-  if (!condition) throw new Error(message)
-}
-
-function assertEq(actual: unknown, expected: unknown, message?: string) {
-  const a = JSON.stringify(actual)
-  const e = JSON.stringify(expected)
-  if (a !== e) throw new Error(message ?? `expected ${e}, got ${a}`)
-}
-
-async function assertRejects(fn: () => Promise<unknown>): Promise<unknown> {
-  try {
-    await fn()
-  } catch (error) {
-    return error
-  }
-  throw new Error('expected the promise to reject')
 }
 
 // RFC 8291 appendix A test vector -------------------------------------------
@@ -115,7 +95,7 @@ const RFC_OPTIONS = {
   ttl: 60,
 }
 
-Deno.test('send produces the exact RFC 8291 test vector body', async () => {
+test('send produces the exact RFC 8291 test vector body', async () => {
   let captured: { url: string; headers: Headers; body: Uint8Array } | undefined
   const fetchMock = async (input: RequestInfo | URL, init?: RequestInit) => {
     captured = {
@@ -130,16 +110,16 @@ Deno.test('send produces the exact RFC 8291 test vector body', async () => {
     ...(await rfcDeps()),
   })
   assert(captured)
-  assertEq(captured.url, RFC_SUBSCRIPTION.endpoint)
-  assertEq(captured.headers.get('content-encoding'), 'aes128gcm')
-  assertEq(captured.headers.get('content-type'), 'application/octet-stream')
-  assertEq(captured.headers.get('ttl'), '60')
-  assertEq(b64url(captured.body), RFC_BODY)
+  assert.equal(captured.url, RFC_SUBSCRIPTION.endpoint)
+  assert.equal(captured.headers.get('content-encoding'), 'aes128gcm')
+  assert.equal(captured.headers.get('content-type'), 'application/octet-stream')
+  assert.equal(captured.headers.get('ttl'), '60')
+  assert.equal(b64url(captured.body), RFC_BODY)
   const authorization = captured.headers.get('authorization') ?? ''
-  assertEq(authorization.split(', k=')[1], RFC_AS_PUBLIC)
+  assert.equal(authorization.split(', k=')[1], RFC_AS_PUBLIC)
 })
 
-Deno.test('body decrypts like a browser and matches RFC intermediates', async () => {
+test('body decrypts like a browser and matches RFC intermediates', async () => {
   const { body } = await encrypt(
     RFC_SUBSCRIPTION,
     RFC_MESSAGE,
@@ -152,8 +132,8 @@ Deno.test('body decrypts like a browser and matches RFC intermediates', async ()
   const keyLen = body[20]
   const appPublic = body.slice(21, 21 + keyLen)
   const ciphertext = body.slice(21 + keyLen)
-  assertEq(recordSize, 4096)
-  assertEq(keyLen, 65)
+  assert.equal(recordSize, 4096)
+  assert.equal(keyLen, 65)
 
   const uaKey = await crypto.subtle.importKey(
     'jwk',
@@ -226,19 +206,19 @@ Deno.test('body decrypts like a browser and matches RFC intermediates', async ()
   )
 
   // RFC appendix A intermediate values
-  assertEq(
+  assert.equal(
     b64url(new Uint8Array(sharedSecret)),
     'kyrL1jIIOHEzg3sM2ZWRHDRB62YACZhhSlknJ672kSs',
   )
-  assertEq(
+  assert.equal(
     b64url(new Uint8Array(ikm)),
     'S4lYMb_L0FxCeq0WhDx813KgSYqU26kOyzWUdsXYyrg',
   )
-  assertEq(
+  assert.equal(
     b64url(new Uint8Array(await crypto.subtle.exportKey('raw', cek))),
     'oIhVW04MRdy2XN9CiKLxTg',
   )
-  assertEq(b64url(new Uint8Array(nonce)), '4h_95klXJ5E_qnoN')
+  assert.equal(b64url(new Uint8Array(nonce)), '4h_95klXJ5E_qnoN')
 
   const plaintext = new Uint8Array(
     await crypto.subtle.decrypt(
@@ -247,7 +227,7 @@ Deno.test('body decrypts like a browser and matches RFC intermediates', async ()
       ciphertext,
     ),
   )
-  assertEq(
+  assert.equal(
     b64url(plaintext),
     b64url(concat(textEncoder.encode(RFC_MESSAGE), new Uint8Array([2]))),
   )
@@ -255,16 +235,16 @@ Deno.test('body decrypts like a browser and matches RFC intermediates', async ()
 
 // VAPID keys and JWT ---------------------------------------------------------
 
-Deno.test('generateVapidKey returns a private JWK; vapidPublicKey derives its public key', async () => {
+test('generateVapidKey returns a private JWK; vapidPublicKey derives its public key', async () => {
   const keys = await generateVapidKey()
-  assertEq(keys.kty, 'EC')
-  assertEq(keys.crv, 'P-256')
+  assert.equal(keys.kty, 'EC')
+  assert.equal(keys.crv, 'P-256')
   assert(keys.d)
   const pub = b64d(await vapidPublicKey(keys))
-  assertEq(pub.length, 65)
-  assertEq(pub[0], 4)
+  assert.equal(pub.length, 65)
+  assert.equal(pub[0], 4)
   // x and y of the JWK must assemble into the raw public point.
-  assertEq(
+  assert.equal(
     await vapidPublicKey(keys),
     b64url(
       concat(
@@ -276,12 +256,12 @@ Deno.test('generateVapidKey returns a private JWK; vapidPublicKey derives its pu
   )
 })
 
-Deno.test('vapidPublicKey marshals JWK x and y into the raw public point', async () => {
-  assertEq(await vapidPublicKey(RFC_AS_JWK), RFC_AS_PUBLIC)
-  assertEq(await vapidPublicKey(JSON.stringify(RFC_AS_JWK)), RFC_AS_PUBLIC)
+test('vapidPublicKey marshals JWK x and y into the raw public point', async () => {
+  assert.equal(await vapidPublicKey(RFC_AS_JWK), RFC_AS_PUBLIC)
+  assert.equal(await vapidPublicKey(JSON.stringify(RFC_AS_JWK)), RFC_AS_PUBLIC)
 })
 
-Deno.test('authorization header carries a valid ES256 JWT', async () => {
+test('authorization header carries a valid ES256 JWT', async () => {
   const keys = await generateVapidKey()
   const publicKey = await vapidPublicKey(keys)
   const subscriber = 'mailto:admin@example.com'
@@ -303,13 +283,13 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
   assert(jwt && k)
 
   const [header, payload, sig] = jwt.split('.')
-  assertEq(JSON.parse(new TextDecoder().decode(b64d(header))), {
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(b64d(header))), {
     typ: 'JWT',
     alg: 'ES256',
   })
   const claims = JSON.parse(new TextDecoder().decode(b64d(payload)))
-  assertEq(claims.aud, 'https://push.example.net')
-  assertEq(claims.sub, subscriber)
+  assert.equal(claims.aud, 'https://push.example.net')
+  assert.equal(claims.sub, subscriber)
   assert(
     Math.abs(claims.exp - (Math.floor(Date.now() / 1000) + 12 * 60 * 60)) < 10,
   )
@@ -331,8 +311,8 @@ Deno.test('authorization header carries a valid ES256 JWT', async () => {
 
   // k is the raw public point marshaled from the JWK; it must equal the
   // public key WebCrypto generated alongside the private key.
-  assertEq(k, await vapidPublicKey(keys))
-  assertEq(k, publicKey)
+  assert.equal(k, await vapidPublicKey(keys))
+  assert.equal(k, publicKey)
 })
 
 // send() behavior -------------------------------------------------------------
@@ -346,7 +326,7 @@ const SUBSCRIPTION: Subscription = {
   },
 }
 
-Deno.test('vapid key material is imported and cached once per JWK or string', async () => {
+test('vapid key material is imported and cached once per JWK or string', async () => {
   const original = crypto.subtle.importKey.bind(crypto.subtle)
   let ecdsaImports = 0
   const wrapped = ((...args: Parameters<typeof original>) => {
@@ -369,10 +349,10 @@ Deno.test('vapid key material is imported and cached once per JWK or string', as
       await send(SUBSCRIPTION, 'x', { vapid: keys, subscriber, ttl: 60 }, {
         fetch: fetchMock,
       })
-      assertEq(await vapidPublicKey(keys), publicKey)
+      assert.equal(await vapidPublicKey(keys), publicKey)
     }
     // Repeated sends with the same JWK object reuse the cached import.
-    assertEq(ecdsaImports, 1)
+    assert.equal(ecdsaImports, 1)
     const serialized = JSON.stringify(keys)
     for (let i = 0; i < 3; i++) {
       await send(
@@ -381,16 +361,16 @@ Deno.test('vapid key material is imported and cached once per JWK or string', as
         { vapid: serialized, subscriber, ttl: 60 },
         { fetch: fetchMock },
       )
-      assertEq(await vapidPublicKey(serialized), publicKey)
+      assert.equal(await vapidPublicKey(serialized), publicKey)
     }
     // One import for the JWK object, one for the serialized string.
-    assertEq(ecdsaImports, 2)
+    assert.equal(ecdsaImports, 2)
   } finally {
     crypto.subtle.importKey = original
   }
 })
 
-Deno.test('send posts the encrypted record with the expected headers', async () => {
+test('send posts the encrypted record with the expected headers', async () => {
   const keys = await generateVapidKey()
   let request: Request | undefined
   const fetchMock = (input: RequestInfo | URL, init?: RequestInit) => {
@@ -410,22 +390,22 @@ Deno.test('send posts the encrypted record with the expected headers', async () 
     { fetch: fetchMock },
   )
   assert(request)
-  assertEq(request.method, 'POST')
-  assertEq(request.url, SUBSCRIPTION.endpoint)
-  assertEq(request.headers.get('content-encoding'), 'aes128gcm')
-  assertEq(request.headers.get('content-type'), 'application/octet-stream')
-  assertEq(request.headers.get('ttl'), '3600')
-  assertEq(request.headers.get('topic'), 'a-topic')
-  assertEq(request.headers.get('urgency'), 'high')
+  assert.equal(request.method, 'POST')
+  assert.equal(request.url, SUBSCRIPTION.endpoint)
+  assert.equal(request.headers.get('content-encoding'), 'aes128gcm')
+  assert.equal(request.headers.get('content-type'), 'application/octet-stream')
+  assert.equal(request.headers.get('ttl'), '3600')
+  assert.equal(request.headers.get('topic'), 'a-topic')
+  assert.equal(request.headers.get('urgency'), 'high')
   assert((request.headers.get('authorization') ?? '').startsWith('vapid t='))
 
   const body = new Uint8Array(await request.arrayBuffer())
-  assertEq(body.length, 103 + 4)
-  assertEq(new DataView(body.buffer).getUint32(16, false), 4096)
-  assertEq(body[20], 65)
+  assert.equal(body.length, 103 + 4)
+  assert.equal(new DataView(body.buffer).getUint32(16, false), 4096)
+  assert.equal(body[20], 65)
 })
 
-Deno.test('send throws PushError on endpoint errors', async () => {
+test('send throws PushError on endpoint errors', async () => {
   const keys = await generateVapidKey()
   const options = {
     vapid: keys,
@@ -467,24 +447,27 @@ Deno.test('send throws PushError on endpoint errors', async () => {
     },
   ]
   for (const c of cases) {
-    const error = await assertRejects(() =>
+    await assert.rejects(
       send(SUBSCRIPTION, 'x', options, {
         fetch: () =>
           Promise.resolve(
             new Response(c.body, { status: c.status, headers: c.headers }),
           ),
-      })
-    ) as PushError
-    assert(error instanceof Error)
-    assertEq(error.statusCode, c.status)
-    assertEq(error.message, c.message)
-    assertEq(error.permanent, c.permanent)
-    assertEq(error.endpointHost, 'the.push.server')
-    if (c.location !== undefined) assertEq(error.location, c.location)
+      }),
+      (error: PushError) => {
+        assert(error instanceof Error)
+        assert.equal(error.statusCode, c.status)
+        assert.equal(error.message, c.message)
+        assert.equal(error.permanent, c.permanent)
+        assert.equal(error.endpointHost, 'the.push.server')
+        if (c.location !== undefined) assert.equal(error.location, c.location)
+        return true
+      },
+    )
   }
 })
 
-Deno.test('send validates its inputs', async () => {
+test('send validates its inputs', async () => {
   const keys = await generateVapidKey()
   const options = {
     vapid: keys,
@@ -492,10 +475,10 @@ Deno.test('send validates its inputs', async () => {
     ttl: 60,
   }
 
-  await assertRejects(() =>
+  await assert.rejects(() =>
     send({ endpoint: '', keys: { auth: 'x', p256dh: 'x' } }, 'x', options)
   )
-  await assertRejects(() =>
+  await assert.rejects(() =>
     send(
       {
         ...SUBSCRIPTION,
@@ -505,7 +488,7 @@ Deno.test('send validates its inputs', async () => {
       options,
     )
   )
-  await assertRejects(() =>
+  await assert.rejects(() =>
     send(
       {
         ...SUBSCRIPTION,
@@ -515,41 +498,41 @@ Deno.test('send validates its inputs', async () => {
       options,
     )
   )
-  await assertRejects(() =>
+  await assert.rejects(() =>
     send(
       { ...SUBSCRIPTION, keys: { auth: SUBSCRIPTION.keys.auth, p256dh: '{}' } },
       'x',
       options,
     )
   )
-  await assertRejects(() => send(SUBSCRIPTION, 'a'.repeat(3994), options))
-  await assertRejects(() =>
+  await assert.rejects(() => send(SUBSCRIPTION, 'a'.repeat(3994), options))
+  await assert.rejects(() =>
     send(SUBSCRIPTION, 'a'.repeat(10), { ...options, recordSize: 100 })
   )
-  await assertRejects(() =>
+  await assert.rejects(() =>
     send(
       SUBSCRIPTION,
       'x',
       { ...options, urgency: 'urgent' } as unknown as SendOptions,
     )
   )
-  await assertRejects(() =>
+  await assert.rejects(() =>
     send(SUBSCRIPTION, 'x', { ...options, subscriber: 'example.com' })
   )
-  await assertRejects(() =>
+  await assert.rejects(() =>
     send({ ...SUBSCRIPTION, endpoint: 'not a url' }, 'x', options)
   )
-  await assertRejects(() =>
+  await assert.rejects(() =>
     send(SUBSCRIPTION, 'x', { ...options, vapid: 'not json' })
   )
-  await assertRejects(() =>
+  await assert.rejects(() =>
     send(SUBSCRIPTION, 'x', { ...options, vapid: {} as JsonWebKey })
   )
   const { ttl: _ttl, ...noTtl } = options
-  await assertRejects(() => send(SUBSCRIPTION, 'x', noTtl as SendOptions))
+  await assert.rejects(() => send(SUBSCRIPTION, 'x', noTtl as SendOptions))
 })
 
-Deno.test('accepts a JSON-serialized VAPID private key', async () => {
+test('accepts a JSON-serialized VAPID private key', async () => {
   const keys = await generateVapidKey()
   let sent = false
   await send(SUBSCRIPTION, 'x', {

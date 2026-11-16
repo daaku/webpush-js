@@ -2,13 +2,17 @@
 
 Web Push client built on WebCrypto: aes128gcm message encryption
 ([RFC 8291](https://www.rfc-editor.org/rfc/rfc8291)) with VAPID authentication
-([RFC 8292](https://www.rfc-editor.org/rfc/rfc8292)). Runs in Deno, Node, and
+([RFC 8292](https://www.rfc-editor.org/rfc/rfc8292)). Runs in Node and
 browsers. No dependencies.
 
 ## Usage
 
+```sh
+npm install @daaku/webpush
+```
+
 ```ts
-import { generateVapidKey, send, vapidPublicKey } from './mod.ts'
+import { generateVapidKey, send, vapidPublicKey } from '@daaku/webpush'
 
 const privateKey = await generateVapidKey()
 // vapidPublicKey(privateKey) goes to the frontend for pushManager.subscribe,
@@ -36,8 +40,8 @@ await send(subscription, JSON.stringify({ title: 'Hello' }), {
 
 ## Example
 
-```
-deno task dev
+```sh
+npm run dev
 ```
 
 Serves the demo page on http://127.0.0.1:8000.
